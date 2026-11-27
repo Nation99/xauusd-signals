@@ -2,7 +2,8 @@
 
 A static, single-page gold dashboard built around **1H market structure**.
 
-- Live gold price and a 1H candlestick chart (TradingView Lightweight Charts)
+- Live XAU/USD spot quote (TradingView OANDA feed, refreshed every 3 s)
+- 1H candlestick chart (TradingView Lightweight Charts)
 - Trend channel, support/resistance, EMA context
 - Rule-based structure model: HH+HL = bullish, LH+LL = bearish, otherwise no trades
 - Bias only flips on a 1H close beyond the key swing **plus** a confirmed higher low / lower high
@@ -10,12 +11,16 @@ A static, single-page gold dashboard built around **1H market structure**.
 - Entry / Stop / TP1–TP3, risk calculator, local signal log
 - No backend, no API key required
 
+## Live
+
+<https://nation99.github.io/xauusd-signals/>
+
 ## Files
 
 | File | Purpose |
 | --- | --- |
 | `index.html` | The complete self-contained site (CSS, JS and chart library inlined). |
-| `xauusd-signals.zip` | Modular source: `index.html`, `assets/css`, `assets/js`, README, `.nojekyll`. |
+| `xauusd-signals.zip` | Modular source: `index.html`, `assets/css`, `assets/js`, README. |
 
 ## Deploy
 
@@ -23,7 +28,7 @@ The site is published with GitHub Pages from the repository root. To host it els
 
 ## Data
 
-The live quote is the Coinbase PAXG-USD bid/ask midpoint and the candles come from the same market, so price and chart stay on one coherent gold-tracking feed. gold-api.com is the fallback. Twelve Data can be added in Settings for XAU/USD candles.
+The spot quote — price, daily open / high / low and change % — comes from TradingView's OANDA:XAUUSD feed, polled every 3 seconds. Candles are built from Coinbase's PAXG-USD market (gold-backed token) and rescaled onto the live spot quote so chart levels, entries and stops agree with the displayed price. gold-api.com is the fallback quote. Twelve Data can be added in Settings for native XAU/USD candles.
 
 ## Rules (short)
 
