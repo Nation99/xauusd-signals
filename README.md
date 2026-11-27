@@ -8,7 +8,7 @@ A static, single-page gold dashboard built around **1H market structure**.
 - Rule-based structure model: HH+HL = bullish, LH+LL = bearish, otherwise no trades
 - Bias only flips on a 1H close beyond the key swing **plus** a confirmed higher low / lower high
 - Sells only in bearish structure, buys only in bullish structure
-- Entry / Stop / TP1–TP3, risk calculator, local signal log
+- Entry / Stop / TP1–TP3 (live setup or a dashed preview of the next trigger), risk calculator, local signal log
 - No backend, no API key required
 
 ## Live

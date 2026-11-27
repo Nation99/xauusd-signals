@@ -1292,6 +1292,11 @@ input[type="checkbox"] { accent-color: var(--gold); }
 .signalcard__title { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
 .signalcard__title .eyebrow { flex-basis: 100%; }
 
+.signalcard.is-preview .levels dd { color: var(--text-dim); }
+.signalcard.is-preview .level--entry dd { color: var(--gold-soft); }
+.signalcard.is-preview .levels { border-style: dashed; }
+.signalcard.is-preview .signalhero__sub { color: var(--gold-soft); }
+
 </style>
 </head>
 <body>
@@ -2671,8 +2676,8 @@ XAU.STORAGE_KEYS = {
   function lastOf(arr) { return arr && arr.length ? arr[arr.length - 1] : null; }
   function prevOf(arr) { return arr && arr.length > 1 ? arr[arr.length - 2] : null; }
 
-  function targetCandidates(m, side) {
-    var entry = m.price;
+  function targetCandidates(m, side, entryAt) {
+    var entry = isFinite(entryAt) ? entryAt : m.price;
     var sign = side === "BUY" ? 1 : -1;
     var list = [];
     var ch = m.channel;
@@ -2707,10 +2712,10 @@ XAU.STORAGE_KEYS = {
     return list;
   }
 
-  function buildTargets(m, side, risk) {
-    var entry = m.price;
+  function buildTargets(m, side, risk, entryAt) {
+    var entry = isFinite(entryAt) ? entryAt : m.price;
     var sign = side === "BUY" ? 1 : -1;
-    var candidates = targetCandidates(m, side);
+    var candidates = targetCandidates(m, side, entry);
     var minR = [1.1, 2.2, 3.1];
     var maxR = [2.0, 3.2, 5.5];
     var fallback = [1.5, 2.5, 3.8];
@@ -2988,6 +2993,61 @@ XAU.STORAGE_KEYS = {
       }
     }
 
+  function buildPreview(m, b, atr, rangeHigh, rangeLow) {
+    var price = m.price;
+    var bull = b.side === "BULLISH";
+    var side = bull ? "BUY" : "SELL";
+    var extended = bull ? (price - b.keyLevel) / atr > 0.9 : (b.keyLevel - price) / atr > 0.9;
+    var trig, entry, sl, note;
+
+    if (bull) {
+      if (extended && isFinite(rangeHigh)) {
+        trig = rangeHigh;
+        entry = Math.max(price, rangeHigh + atr * 0.1);
+        sl = rangeHigh - atr * 0.45;
+        note = "Triggers above " + U.fmtPrice(trig);
+      } else {
+        trig = b.keyLevel;
+        entry = Math.max(price, b.keyLevel);
+        sl = b.keyLevel - atr * 0.45;
+        note = "Triggers on a higher-low retest at " + U.fmtPrice(trig);
+      }
+      if (entry - sl < atr * 0.5) sl = entry - atr * 0.5;
+      if (entry - sl > atr * 2.0) sl = entry - atr * 2.0;
+    } else {
+      if (extended && isFinite(rangeLow)) {
+        trig = rangeLow;
+        entry = Math.min(price, rangeLow - atr * 0.1);
+        sl = rangeLow + atr * 0.45;
+        note = "Triggers below " + U.fmtPrice(trig);
+      } else {
+        trig = b.keyLevel;
+        entry = Math.min(price, b.keyLevel);
+        sl = b.keyLevel + atr * 0.45;
+        note = "Triggers on a lower-high retest at " + U.fmtPrice(trig);
+      }
+      if (sl - entry < atr * 0.5) sl = entry + atr * 0.5;
+      if (sl - entry > atr * 2.0) sl = entry + atr * 2.0;
+    }
+
+    var risk = Math.abs(entry - sl);
+    if (!isFinite(risk) || risk < 0.01) return null;
+    var tps = buildTargets(m, side, risk, entry);
+    return {
+      side: side,
+      entry: U.round(entry, 2),
+      sl: U.round(sl, 2),
+      tps: tps,
+      risk: U.round(risk, 2),
+      stopPts: U.round(risk, 2),
+      rr: U.round(tps[1].r, 2),
+      trigger: U.round(trig, 2),
+      note: note
+    };
+  }
+
+    var preview = (!plan && !opts.bootstrap && b.side && !b.pending && isFinite(b.keyLevel)) ? buildPreview(m, b, atr, rangeHigh, rangeLow) : null;
+
     var mode = plan ? "setup" : b.side ? "waiting" : "neutral";
     var keyLabel = b.side === "BEARISH" ? "Lower high" : b.side === "BULLISH" ? "Higher low" : "Key level";
     var allowed = b.side === "BEARISH" ? "Sells only" : b.side === "BULLISH" ? "Buys only" : "No trades";
@@ -3066,6 +3126,7 @@ XAU.STORAGE_KEYS = {
       },
       biasState: b,
       plan: plan,
+      preview: preview,
       reasons: reasons.slice(0, 4),
       channel: m.channel,
       structure: m.structure,
@@ -4099,6 +4160,7 @@ XAU.STORAGE_KEYS = {
       at: Date.now(),
       locked: false,
       plan: null,
+      preview: result ? result.preview : null,
       waitText: result ? result.waitText : "",
       reasons: note ? [{ delta: 0, text: note }] : (result ? result.reasons.slice(0, 4) : [{ delta: 0, text: "Waiting for the first structure calculation." }])
     };
@@ -4545,6 +4607,8 @@ XAU.STORAGE_KEYS = {
     } else if (mode === "waiting") {
       if (bias && bias.state === "questioned") {
         sub = (bias.side === "BEARISH" ? "Bearish" : "Bullish") + " bias · structure questioned";
+      } else if (result.preview) {
+        sub = "Preview — " + result.preview.note.replace(/^Triggers/, "triggers");
       } else if (result.waitText) {
         sub = result.waitText;
       } else {
@@ -4568,6 +4632,7 @@ XAU.STORAGE_KEYS = {
     var rLabels = [el.sigTp1R, el.sigTp2R, el.sigTp3R];
 
     if (plan) {
+      el.card.classList.remove("is-preview");
       setText(el.sigEntry, U.fmtPrice(plan.entry));
       setText(el.sigSl, U.fmtPrice(plan.sl));
       plan.tps.forEach(function (tp, i) {
@@ -4577,7 +4642,20 @@ XAU.STORAGE_KEYS = {
       setText(el.sigRR, "1 : " + plan.rr.toFixed(2));
       setText(el.sigDist, plan.stopPts.toFixed(2) + " pts");
       rows.forEach(function (r) { r.closest(".level").classList.remove("is-empty"); });
+    } else if (result.preview) {
+      var pv = result.preview;
+      setText(el.sigEntry, U.fmtPrice(pv.entry));
+      setText(el.sigSl, U.fmtPrice(pv.sl));
+      pv.tps.forEach(function (tp, i) {
+        setText([el.sigTp1, el.sigTp2, el.sigTp3][i], U.fmtPrice(tp.price));
+        setText(rLabels[i], tp.r.toFixed(2) + "R");
+      });
+      setText(el.sigRR, "1 : " + pv.rr.toFixed(2));
+      setText(el.sigDist, pv.stopPts.toFixed(2) + " pts");
+      rows.forEach(function (r) { r.closest(".level").classList.remove("is-empty"); });
+      el.card.classList.add("is-preview");
     } else {
+      el.card.classList.remove("is-preview");
       rows.forEach(function (r) { setText(r, "—"); r.closest(".level").classList.add("is-empty"); });
       rLabels.forEach(function (r) { setText(r, "—"); });
       setText(el.sigRR, "—");
