@@ -3025,10 +3025,10 @@ XAU.STORAGE_KEYS = {
           : "Price closed beyond the key level — no new trade until the flip sequence confirms" });
         reasons.push({ text: flipText });
       } else if (b.side === "BEARISH") {
-        reasons.push({ text: "Waiting for a 1H close below the 20-bar low" + (isFinite(rangeLow) ? " at " + U.fmtPrice(rangeLow) : "") + ", or a retest of the lower high at " + U.fmtPrice(b.keyLevel) });
+        reasons.push({ text: "Waiting for a break below the 20-bar low" + (isFinite(rangeLow) ? " at " + U.fmtPrice(rangeLow) : "") + ", or a retest of the lower high at " + U.fmtPrice(b.keyLevel) });
         reasons.push({ text: "No counter-trend buys while the bias is bearish" });
       } else {
-        reasons.push({ text: "Waiting for a 1H close above the 20-bar high" + (isFinite(rangeHigh) ? " at " + U.fmtPrice(rangeHigh) : "") + ", or a retest of the higher low at " + U.fmtPrice(b.keyLevel) });
+        reasons.push({ text: "Waiting for a break above the 20-bar high" + (isFinite(rangeHigh) ? " at " + U.fmtPrice(rangeHigh) : "") + ", or a retest of the higher low at " + U.fmtPrice(b.keyLevel) });
         reasons.push({ text: "No counter-trend sells while the bias is bullish" });
       }
     }
@@ -3036,8 +3036,8 @@ XAU.STORAGE_KEYS = {
     var waitText = "";
     if (!plan && b.side && !b.pending) {
       waitText = b.side === "BULLISH"
-        ? "Bullish bias — waiting for a 1H close above " + (isFinite(rangeHigh) ? U.fmtPrice(rangeHigh) : "the 20-bar high") + " or a higher-low retest"
-        : "Bearish bias — waiting for a 1H close below " + (isFinite(rangeLow) ? U.fmtPrice(rangeLow) : "the 20-bar low") + " or a lower-high retest";
+        ? "Bullish bias — waiting for a break above " + (isFinite(rangeHigh) ? U.fmtPrice(rangeHigh) : "the 20-bar high") + " or a higher-low retest"
+        : "Bearish bias — waiting for a break below " + (isFinite(rangeLow) ? U.fmtPrice(rangeLow) : "the 20-bar low") + " or a lower-high retest";
     }
 
     return {
