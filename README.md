@@ -34,7 +34,7 @@ The spot quote — price, daily open / high / low and change % — comes from Tr
 
 1. Read the last confirmed 1H swing high and swing low.
 2. Bias changes only when the full flip sequence completes; a single close beyond the key level puts structure "under question" and blocks new trades.
-3. Trade only with the bias, at a retest of the key level or after a failed breakout.
-4. Stops go just beyond the key structure level.
+3. Trade only with the bias — at a retest of the key level, after a failed breakout, or on a 1H close beyond the 20-bar high/low when the trend is already extended.
+4. Stops go just beyond the key structure level (or the broken 20-bar level).
 
 Not financial advice. Public data can be delayed or wrong; trading gold carries a high risk of loss.

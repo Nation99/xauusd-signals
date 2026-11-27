@@ -2786,7 +2786,8 @@ XAU.STORAGE_KEYS = {
     var atr = Math.max(m.atr, 0.01);
     var candles = m.candles;
     var n = candles.length;
-    var closed = candles[n - 2] || candles[n - 1];
+    var live = candles[n - 1];
+    var closed = candles[n - 2] || live;
     var prev = candles[n - 3] || closed;
     var piv = m.pivots || { highs: [], lows: [] };
     var hi1 = lastOf(piv.highs), hi2 = prevOf(piv.highs);
@@ -2882,8 +2883,18 @@ XAU.STORAGE_KEYS = {
       }
     }
 
+    var look = Math.min(20, n - 3);
+    var rangeHigh = -Infinity, rangeLow = Infinity;
+    for (var ri = n - 2 - look; ri <= n - 3; ri++) {
+      if (ri < 0) continue;
+      if (candles[ri].high > rangeHigh) rangeHigh = candles[ri].high;
+      if (candles[ri].low < rangeLow) rangeLow = candles[ri].low;
+    }
+
     var trigger = null;
     if (b.side && !b.pending && isFinite(b.keyLevel)) {
+      var distAtr = (price - b.keyLevel) / atr;
+
       if (b.side === "BEARISH") {
         var nearShort = price <= b.keyLevel + atr * 0.35 && price >= b.keyLevel - atr * 0.9;
         var rejectedHigh = closed.high >= b.keyLevel - atr * 0.2 && closed.close < b.keyLevel - atr * 0.02 && nearShort;
@@ -2891,8 +2902,25 @@ XAU.STORAGE_KEYS = {
           trigger = {
             side: "SELL",
             kind: failedBreak ? "failed" : "retest",
+            level: b.keyLevel,
             label: failedBreak ? "Failed bullish breakout" : "Lower-high rejection"
           };
+        }
+        if (!trigger && distAtr < -0.9 && isFinite(rangeLow)) {
+          var freshBreakDown = closed.close < rangeLow - atr * 0.05 && prev.close >= rangeLow - atr * 0.05;
+          var heldBreakDown = prev.close < rangeLow - atr * 0.05 &&
+            closed.high >= rangeLow - atr * 0.25 && closed.close < rangeLow - atr * 0.1 && closed.close < closed.open;
+          var breakingDownNow = live && closed.close >= rangeLow - atr * 0.05 &&
+            live.open >= rangeLow - atr * 0.05 && price < rangeLow - atr * 0.1;
+          if (freshBreakDown || heldBreakDown || breakingDownNow) {
+            trigger = {
+              side: "SELL",
+              kind: "breakout",
+              cont: true,
+              level: rangeLow,
+              label: freshBreakDown || breakingDownNow ? "Breakdown below the 20-bar low" : "Breakdown retest"
+            };
+          }
         }
       } else {
         var nearLong = price >= b.keyLevel - atr * 0.35 && price <= b.keyLevel + atr * 0.9;
@@ -2901,8 +2929,25 @@ XAU.STORAGE_KEYS = {
           trigger = {
             side: "BUY",
             kind: failedBreak ? "failed" : "retest",
+            level: b.keyLevel,
             label: failedBreak ? "Failed bearish breakdown" : "Higher-low rejection"
           };
+        }
+        if (!trigger && distAtr > 0.9 && isFinite(rangeHigh)) {
+          var freshBreakUp = closed.close > rangeHigh + atr * 0.05 && prev.close <= rangeHigh + atr * 0.05;
+          var heldBreakUp = prev.close > rangeHigh + atr * 0.05 &&
+            closed.low <= rangeHigh + atr * 0.25 && closed.close > rangeHigh + atr * 0.1 && closed.close > closed.open;
+          var breakingUpNow = live && closed.close <= rangeHigh + atr * 0.05 &&
+            live.open <= rangeHigh + atr * 0.05 && price > rangeHigh + atr * 0.1;
+          if (freshBreakUp || heldBreakUp || breakingUpNow) {
+            trigger = {
+              side: "BUY",
+              kind: "breakout",
+              cont: true,
+              level: rangeHigh,
+              label: freshBreakUp || breakingUpNow ? "Breakout above the 20-bar high" : "Breakout retest"
+            };
+          }
         }
       }
     }
@@ -2912,12 +2957,16 @@ XAU.STORAGE_KEYS = {
       var entry = price;
       var sl;
       if (trigger.side === "SELL") {
-        sl = Math.max(b.keyLevel, closed.high) + atr * 0.3;
-        sl = Math.max(sl, entry + atr * 0.6);
+        sl = trigger.cont
+          ? trigger.level + atr * 0.45
+          : Math.max(b.keyLevel, closed.high) + atr * 0.3;
+        sl = Math.max(sl, entry + atr * (trigger.cont ? 0.5 : 0.6));
         if (sl - entry > atr * 2.2) trigger = null;
       } else {
-        sl = Math.min(b.keyLevel, closed.low) - atr * 0.3;
-        sl = Math.min(sl, entry - atr * 0.6);
+        sl = trigger.cont
+          ? trigger.level - atr * 0.45
+          : Math.min(b.keyLevel, closed.low) - atr * 0.3;
+        sl = Math.min(sl, entry - atr * (trigger.cont ? 0.5 : 0.6));
         if (entry - sl > atr * 2.2) trigger = null;
       }
       if (trigger) {
@@ -2967,7 +3016,7 @@ XAU.STORAGE_KEYS = {
       }
       reasons.push({ text: keyLabel + " " + U.fmtPrice(b.keyLevel) + " is the level that would question the bias" });
       if (plan) {
-        reasons.push({ text: trigger.label + " at " + U.fmtPrice(b.keyLevel) + " — " + allowed.toLowerCase() });
+        reasons.push({ text: trigger.label + " at " + U.fmtPrice(isFinite(trigger.level) ? trigger.level : b.keyLevel) + " — " + allowed.toLowerCase() });
         reasons.push({ text: "Stop " + U.fmtPrice(plan.sl) + " beyond structure · targets " + plan.rr1.toFixed(1) + "R / " + plan.rr.toFixed(1) + "R / " + plan.rr3.toFixed(1) + "R" });
       } else if (b.pending) {
         var backIntra = b.side === "BULLISH" ? price > b.pending.level : price < b.pending.level;
@@ -2976,18 +3025,26 @@ XAU.STORAGE_KEYS = {
           : "Price closed beyond the key level — no new trade until the flip sequence confirms" });
         reasons.push({ text: flipText });
       } else if (b.side === "BEARISH") {
-        reasons.push({ text: "Waiting for a retest of the lower high at " + U.fmtPrice(b.keyLevel) + " — no counter-trend buys" });
-        reasons.push({ text: "A close back below the last swing low would extend the bearish structure" });
+        reasons.push({ text: "Waiting for a 1H close below the 20-bar low" + (isFinite(rangeLow) ? " at " + U.fmtPrice(rangeLow) : "") + ", or a retest of the lower high at " + U.fmtPrice(b.keyLevel) });
+        reasons.push({ text: "No counter-trend buys while the bias is bearish" });
       } else {
-        reasons.push({ text: "Waiting for a retest of the higher low at " + U.fmtPrice(b.keyLevel) + " — no counter-trend sells" });
-        reasons.push({ text: "A close back above the last swing high would extend the bullish structure" });
+        reasons.push({ text: "Waiting for a 1H close above the 20-bar high" + (isFinite(rangeHigh) ? " at " + U.fmtPrice(rangeHigh) : "") + ", or a retest of the higher low at " + U.fmtPrice(b.keyLevel) });
+        reasons.push({ text: "No counter-trend sells while the bias is bullish" });
       }
+    }
+
+    var waitText = "";
+    if (!plan && b.side && !b.pending) {
+      waitText = b.side === "BULLISH"
+        ? "Bullish bias — waiting for a 1H close above " + (isFinite(rangeHigh) ? U.fmtPrice(rangeHigh) : "the 20-bar high") + " or a higher-low retest"
+        : "Bearish bias — waiting for a 1H close below " + (isFinite(rangeLow) ? U.fmtPrice(rangeLow) : "the 20-bar low") + " or a lower-high retest";
     }
 
     return {
       tf: tfKey,
       price: price,
       atr: atr,
+      waitText: waitText,
       side: plan ? plan.side : (b.side === "BEARISH" ? "SELL" : b.side === "BULLISH" ? "BUY" : "NEUTRAL"),
       mode: mode,
       setupLabel: trigger ? trigger.label : "",
@@ -3024,10 +3081,32 @@ XAU.STORAGE_KEYS = {
     buildTargets: buildTargets
   };
 
+  function seedBias(pivots, atr, upto) {
+    var highs = [], lows = [];
+    for (var h = 0; h < pivots.highs.length; h++) if (pivots.highs[h].index <= upto - 3) highs.push(pivots.highs[h]);
+    for (var l = 0; l < pivots.lows.length; l++) if (pivots.lows[l].index <= upto - 3) lows.push(pivots.lows[l]);
+    var hi1 = lastOf(highs), hi2 = prevOf(highs);
+    var lo1 = lastOf(lows), lo2 = prevOf(lows);
+    if (!hi1 || !hi2 || !lo1 || !lo2) return null;
+    if (hi1.price > hi2.price + atr * 0.05 && lo1.price > lo2.price + atr * 0.05) {
+      return {
+        side: "BULLISH", keyLevel: lo1.price, keyIndex: lo1.index, keyTime: lo1.time,
+        pending: null, flippedAt: 0, since: 0
+      };
+    }
+    if (hi1.price < hi2.price - atr * 0.05 && lo1.price < lo2.price - atr * 0.05) {
+      return {
+        side: "BEARISH", keyLevel: hi1.price, keyIndex: hi1.index, keyTime: hi1.time,
+        pending: null, flippedAt: 0, since: 0
+      };
+    }
+    return null;
+  }
+
   function bootstrapBias(candles, pivots, atr) {
     var n = candles.length;
     var start = Math.max(6, n - 150);
-    var b = null;
+    var b = seedBias(pivots, atr, start);
     for (var i = start; i <= n; i++) {
       var hs = [], ls = [];
       for (var h = 0; h < pivots.highs.length; h++) if (pivots.highs[h].index <= i - 3) hs.push(pivots.highs[h]);
@@ -4020,6 +4099,7 @@ XAU.STORAGE_KEYS = {
       at: Date.now(),
       locked: false,
       plan: null,
+      waitText: result ? result.waitText : "",
       reasons: note ? [{ delta: 0, text: note }] : (result ? result.reasons.slice(0, 4) : [{ delta: 0, text: "Waiting for the first structure calculation." }])
     };
     UI.renderSignal(view, state.tf);
@@ -4465,6 +4545,8 @@ XAU.STORAGE_KEYS = {
     } else if (mode === "waiting") {
       if (bias && bias.state === "questioned") {
         sub = (bias.side === "BEARISH" ? "Bearish" : "Bullish") + " bias · structure questioned";
+      } else if (result.waitText) {
+        sub = result.waitText;
       } else {
         sub = bias && bias.side === "BEARISH" ? "Bearish bias — waiting for a lower-high retest"
           : bias && bias.side === "BULLISH" ? "Bullish bias — waiting for a higher-low retest"
